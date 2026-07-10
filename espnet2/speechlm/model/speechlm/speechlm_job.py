@@ -4,11 +4,16 @@
 
 """SpeechLM job template implementation for multimodal language modeling."""
 
+import logging
+import random
 import re
 from typing import Any, Callable, Dict
-import random
+
 import numpy as np
 import torch
+
+# One-time flag for the text-id-0/pad collision warning (see preprocessing 3.3).
+_WARNED_TEXT_PAD_COLLISION = False
 
 from espnet2.speechlm.model.abs_job import AbsJobTemplate
 
@@ -340,6 +345,27 @@ class SpeechLMPreprocessor:
 
             # (3.3) this_seq - adjust token IDs and pad to match stream count
             if self.multimodal_io[this_io].is_discrete:
+                # KNOWN LIMITATION: a real token whose tokenizer id equals
+                # pad_id (0) is indistinguishable from padding here, so it is
+                # never offset by modality_bias and its loss is ignored
+                # (ignore_index=0). For text with the Qwen tokenizer, id 0 is
+                # "!", so exclamation marks are silently dropped. A true fix
+                # requires shifting the vocab convention, which would break
+                # compatibility with existing pretrained checkpoints; we only
+                # detect and warn for now.
+                global _WARNED_TEXT_PAD_COLLISION
+                if (
+                    this_io == "text"
+                    and not _WARNED_TEXT_PAD_COLLISION
+                    and (this_seq == self.pad_id).any()
+                ):
+                    _WARNED_TEXT_PAD_COLLISION = True
+                    logging.warning(
+                        "Text message contains tokenizer id 0 (e.g. '!' for "
+                        "Qwen tokenizers); it collides with the padding id and "
+                        "will be treated as padding (dropped from input and "
+                        "loss). This is a known vocab-convention limitation."
+                    )
                 modality_bias = self.vocab_intervals[this_io][0][0]
                 this_seq = np.where(
                     this_seq == self.pad_id, self.pad_id, this_seq + modality_bias
@@ -516,6 +542,23 @@ class SpeechLMPreprocessor:
 
         seq[0] *= 0
         loss_masks[0] *= 0
-        conti_feats = [feat for feat in conti_feats if feat[0] == self.audio_output]
+
+        # Keep only the conti_feats belonging to the KEPT message. Filtering by io
+        # name (feat[0] == self.audio_output) is wrong when audio_input equals
+        # audio_output (e.g. discrete-token input): the user/input message's feats
+        # would survive and be re-injected by _embed into the zeroed positions, so
+        # the "unconditional" CFG sample would still contain the input audio.
+        # Instead, compute each message's content span in frame positions (BOS at
+        # position 0; each message = role + modality + content + eot/eos) and keep
+        # feats whose start position (feat[1], the assembly-time accum_length)
+        # falls inside the kept message's content span.
+        spans, pos = [], 1  # position 1: right after <|bos|>
+        for i in range(len(messages)):
+            pos += 2  # <|role|> and <|modality|>
+            content_len = seq[i * 4 + 3].shape[0]
+            spans.append((pos, pos + content_len))
+            pos += content_len + 1  # content + <|eot|>/<|eos|>
+        lo, hi = spans[audio_idx]
+        conti_feats = [feat for feat in conti_feats if lo <= feat[1] < hi]
 
         return seq, loss_masks, conti_feats
