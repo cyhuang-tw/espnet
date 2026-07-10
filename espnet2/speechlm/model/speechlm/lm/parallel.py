@@ -3,6 +3,8 @@
 
 """Parallel multimodal LLM implementation for HuggingFace models."""
 
+import logging
+
 import torch
 import torch.nn as nn
 import transformers
@@ -212,7 +214,6 @@ def build_parallel_hf_class(model_hf_tag):
             position_ids = kwargs.get("position_ids", None)
 
             inputs_embeds = self._embed(input_ids, kwargs)
-            
 
             # Forward through base transformer model
             output = self.model(
@@ -407,9 +408,7 @@ def build_parallel_hf_class(model_hf_tag):
                     continue
                 # Compute loss only for vocabulary subset [start:end]
                 this_logits = hidden_states[:, :, 1:][this_mask]
-                this_logits = torch.matmul(
-                    this_logits, lm_head_weight[start:end].T
-                )
+                this_logits = torch.matmul(this_logits, lm_head_weight[start:end].T)
                 # Adjust targets to interval-relative indices
                 this_targets = residual_ids[this_mask] - start
                 this_loss = torch.nn.functional.cross_entropy(
@@ -471,6 +470,10 @@ def build_parallel_hf_class(model_hf_tag):
             messages = []
             num_msg = 0
             enforce_modalities = inference_config.get("enforce_modality", [])
+            # Safety cap: a model that keeps emitting <|eot|>-terminated segments
+            # would otherwise loop forever (observed in practice: chains of 5+
+            # consecutive text segments before an audio segment).
+            max_segments = inference_config.get("max_segments", 8)
             while True:
                 # (2.1) Prefill assistant token
                 logits, cache = self._step(
@@ -526,6 +529,13 @@ def build_parallel_hf_class(model_hf_tag):
                     break  # decode next segment only when ending with <|eot|>
 
                 num_msg += 1
+                if num_msg >= max_segments:
+                    logging.warning(
+                        f"Multi-segment inference reached max_segments="
+                        f"{max_segments}; stopping generation early. Increase "
+                        f"'max_segments' in the inference config if intended."
+                    )
+                    break
 
             return messages, cache
 
