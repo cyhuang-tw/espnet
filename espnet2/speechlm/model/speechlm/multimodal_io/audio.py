@@ -504,6 +504,19 @@ class DiscreteAudioIO(AbsIO):
 
         # Remove delay interleaving if it was applied
         if self.delay_interleave:
+            # A segment shorter than num_stream() interleaved frames would
+            # de-interleave to <= 0 frames (uneven empty slices -> RuntimeError
+            # in torch.stack, or silent garbage downstream). Guard BEFORE
+            # de-interleaving and fail loudly with an actionable message.
+            # NOTE: the generation-side `min_step` default (1) does NOT protect
+            # audio; set min_step >= num_stream() in the audio inference config.
+            if codes.size(1) < self.num_stream() or (lengths < self.num_stream()).any():
+                raise ValueError(
+                    f"Audio segment too short to decode with delay_interleave: "
+                    f"needs >= {self.num_stream()} interleaved frames, got "
+                    f"{lengths.tolist()}. Set min_step >= {self.num_stream()} "
+                    f"in the audio inference config."
+                )
             codes = self._apply_delay_deinterleave(codes)
             # Adjust lengths back to original
             lengths = lengths - self.num_stream() + 1
