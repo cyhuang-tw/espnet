@@ -17,14 +17,37 @@ recipe_dir: .
 ##########################################################
 pack_model:
   readme_context:
-    # The training config in the README is conf/training_whisper_sot.yaml,
+    # The README template has no usage section, so the description includes
+    # one. The training config in the README is conf/training_whisper_sot.yaml,
     # which did not produce this checkpoint, so the description says so.
-    description: >-
+    description: |-
       Multi-talker ASR on AMI SDM with serialized output training, fine-tuned
       from Whisper small. This is the checkpoint of
       espnet/multi-talker-whisper-small-ami, packed with ESPnet3. It was trained
       before the ESPnet3 recipe existed, and the training config below is the
       config of the recipe, which was not used to train this checkpoint.
+
+      ## Use
+
+      This model needs the esp2_s2t system of ESPnet3, which is added in
+      [ESPnet PR #6767](https://github.com/espnet/espnet/pull/6767). We tested it
+      with Python 3.12 and PyTorch 2.13.
+
+      ```python
+      from espnet3.publication import InferenceModel
+
+      model = InferenceModel.from_pretrained("espnet/ami_esp2_s2t_whisper_small_sot")
+      print(model({"speech": "meeting.wav"})["hyp"])
+      ```
+
+      The audio should be 16 kHz and mono. The model reads at most 30 seconds, so
+      split longer recordings first. It writes one transcript for all speakers.
+      Each segment starts and ends with a Whisper timestamp, and `????` marks a
+      change of speaker:
+
+      ```
+      <|0.00|> hello<|1.20|>????<|0.80|> hi<|1.50|>
+      ```
   include:
     - ${recipe_dir}/dataset
   # The token list is not included separately. The training stage writes the
