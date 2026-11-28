@@ -25,41 +25,14 @@ exp_dir: ${recipe_dir}/exp/${exp_tag}
 ##########################################################
 #                    METRIC DEFINITION                   #
 ##########################################################
-# The metrics of this system. Each of them scores one utterance group at a
-# time, so the results cannot be compared with session-level cpWER or DER. A
-# group is a short window, and each group gets its own speaker mapping.
-#
-# Each metric needs the separator symbol that the checkpoint was trained with,
-# and none of them has a default. With the wrong symbol, the scores are only
-# bad, and nothing reports a configuration error. The symbol is left out here,
-# so a recipe that does not set it fails when the metric is created. A recipe
-# replaces this whole list and sets `speaker_change_symbol` for each metric.
+# The default metric is the WER of the hypothesis. SOT recipes replace this
+# list with the utterance-group metrics in espnet3/systems/esp2_s2t/metrics/,
+# as egs3/ami/esp2_s2t/conf/metrics.yaml does. Those metrics need the
+# speaker-change symbol that the checkpoint was trained with.
 metrics:
   - metric:
-      _target_: espnet3.systems.esp2_s2t.metrics.cpwer.UtteranceGroupCpWER
+      _target_: espnet3.systems.esp2_asr.metrics.wer.WER
       clean_types:        # optional TextCleaner pipeline, e.g. [whisper_en]
     inputs:
-      ref: dataset:text   # the test set's SOT reference
-      hyp: hyp            # <test_name>/hyp.scp, timestamps removed
-
-  - metric:
-      _target_: espnet3.systems.esp2_s2t.metrics.der.UtteranceGroupDER
-      collar: 0.25        # collar in seconds
-      clean_types:
-    inputs:
-      ref: dataset:text   # DER uses the timestamps in both texts
-      hyp: hyp
-
-  - metric:
-      _target_: espnet3.systems.esp2_s2t.metrics.speaker_count.UtteranceGroupSpeakerCountAccuracy
-      clean_types:
-    inputs:
-      ref: dataset:text   # blocks are counted after cleaning
-      hyp: hyp
-
-  - metric:
-      _target_: espnet3.systems.esp2_s2t.metrics.wer.UtteranceGroupWER
-      clean_types:
-    inputs:
-      ref: dataset:text   # blocks sorted by their first timestamp
-      hyp: hyp            # blocks kept in the order of the model output
+      ref: dataset:text   # the test set's transcript
+      hyp: hyp            # <test_name>/hyp.scp

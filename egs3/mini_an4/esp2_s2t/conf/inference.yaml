@@ -19,6 +19,7 @@ dataset:
 # in espnet3/systems/esp2_s2t/src/sot/whisper_timestamp_scorer.py, which this
 # test must run.
 model:
+  _target_: espnet3.systems.esp2_s2t.src.sot.s2t_inference.Speech2Text
   s2t_train_config: ${exp_dir}/config.yaml
   s2t_model_file: ${exp_dir}/epoch0_step1_valid.loss.ckpt
   beam_size: 1
@@ -31,5 +32,13 @@ model:
   speaker_change_symbol: ${oc.env:MINI_AN4_SOT_SPEAKER_CHANGE_SYMBOL,????}
   adaptive_timestamp: true
 
-# input_key, batch_size, the contract and the runner come from
+# SOT decoding takes one utterance group at a time, because the timestamp rules
+# use one prompt length for the whole beam.
+batch_size: null
+
+# The SOT runner keeps the timestamps and speaker-change symbols in `hyp`.
+runner:
+  _target_: espnet3.systems.esp2_s2t.src.sot.inference_runner.SotInferenceRunner
+
+# input_key and the contract come from
 # egs3/TEMPLATE/esp2_s2t/conf/inference.yaml.

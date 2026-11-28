@@ -1,4 +1,4 @@
-"""SOT output formatting for the shared inference runner."""
+"""Inference runner for ESPnet2 S2T models."""
 
 from __future__ import annotations
 
@@ -7,7 +7,14 @@ from espnet3.systems.base.inference_runner import InferenceRunner
 
 
 class ESP2S2TInferenceRunner(InferenceRunner):
-    """Convert a native S2T result to the contracted ``hyp`` field."""
+    """Convert the result of an ESPnet2 S2T model to the contracted ``hyp`` field.
+
+    The runner works with ``espnet2.bin.s2t_inference.Speech2Text`` and returns
+    the text of the best hypothesis. Serialized output training needs its own
+    output format, which
+    :class:`espnet3.systems.esp2_s2t.src.sot.inference_runner.SotInferenceRunner`
+    provides.
+    """
 
     @staticmethod
     def prepare_model_inputs(inputs):
@@ -35,50 +42,29 @@ class ESP2S2TInferenceRunner(InferenceRunner):
 
     @staticmethod
     def format_output(result, *, batched):
-        """Render the best hypothesis, timestamps and separators intact.
+        """Return the text of the best hypothesis as ``hyp``.
 
         Args:
-            result: The n-best list of ``Speech2Text``.
+            result: The n-best list of ``Speech2Text``, or a list of n-best
+                lists for a batch. Each entry starts with the text.
             batched: Whether the call was a batch.
 
-        The text comes from the converter of the decoder. The ``Speech2Text``
-        of this system builds that converter so that it keeps special tokens.
-        A separator that the checkpoint added to its vocabulary therefore stays
-        in the text. Only the prompt is removed, which is the language symbol
-        and the task symbol at the start.
-
         Returns:
-            ``{"hyp": ...}``. The value is ``""`` when the decoder returned no
-            hypothesis.
-
-        Raises:
-            ValueError: If the call was a batch. The timestamp rules track
-                one prompt length for the whole beam, so SOT decoding takes
-                one utterance group at a time (``batch_size: null``).
-            ValueError: If the text does not start with the two prompt
-                tokens, which means a converter dropped special tokens.
+            ``{"hyp": ...}`` for one call, or a list of them for a batch. The
+            value is ``""`` when the model returned no hypothesis or no text.
 
         Examples:
-            >>> tokens = ["<|en|>", "<|transcribe|>", "<|0.00|>", " hi", "<|0.40|>"]
-            >>> result = [("".join(tokens), tokens, [], " hi", None)]
+            >>> result = [("hello", ["hello"], [7], "hello", None)]
             >>> ESP2S2TInferenceRunner.format_output(result, batched=False)
-            {'hyp': '<|0.00|> hi<|0.40|>'}
+            {'hyp': 'hello'}
         """
         if batched:
-            raise ValueError(
-                "SOT decoding takes one utterance group at a time. "
-                "Set batch_size: null in the inference config."
-            )
-        if not result:
+            return [ESP2S2TInferenceRunner._format_one(nbest) for nbest in result]
+        return ESP2S2TInferenceRunner._format_one(result)
+
+    @staticmethod
+    def _format_one(nbest):
+        """Return the text of the first entry of one n-best list."""
+        if not nbest or nbest[0][0] is None:
             return {"hyp": ""}
-        text, tokens, *_ = result[0]
-        prompt = "".join(tokens[:2])
-        # A converter that drops special tokens leaves words in these two slots.
-        special = [t for t in tokens[:2] if t.startswith("<|") and t.endswith("|>")]
-        if len(special) != 2 or not text.startswith(prompt):
-            raise ValueError(
-                f"hypothesis {text!r} does not start with its prompt {prompt!r}. "
-                "Decode with espnet3.systems.esp2_s2t.src.sot.s2t_inference."
-                "Speech2Text, and set speaker_change_symbol or adaptive_timestamp."
-            )
-        return {"hyp": text[len(prompt) :]}
+        return {"hyp": nbest[0][0]}

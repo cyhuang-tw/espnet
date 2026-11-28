@@ -48,19 +48,19 @@ parallel:
 ##########################################################
 #                    MODEL AND OUTPUT                    #
 ##########################################################
-# A recipe sets the checkpoint and its decoding options under `model`.
+# A recipe sets the checkpoint and its decoding options under `model`. SOT
+# recipes use espnet3.systems.esp2_s2t.src.sot.s2t_inference.Speech2Text here.
 model:
-  _target_: espnet3.systems.esp2_s2t.src.sot.s2t_inference.Speech2Text
+  _target_: espnet2.bin.s2t_inference.Speech2Text
 
 # Sample field passed to the model.
 input_key: speech
 
-# The model decodes one utterance group per call, because the timestamp rules
-# use one prompt length for the whole beam. The runner rejects batched input.
+# Speech2Text decodes one recording per call.
 batch_size: null
 
-# The runner writes the best hypothesis to `hyp` with its timestamps and
-# speaker-change symbols, and the contract checks the output.
+# The runner writes the text of the best hypothesis to `hyp`, and the contract
+# checks the output.
 contract:
   inputs:
     speech:
@@ -71,12 +71,15 @@ contract:
   outputs:
     hyp:
       kind: text
-      label: Serialized Transcription
+      label: Transcription
 
 ##########################################################
 #               PROVIDER AND RUNNER SETTING              #
 ##########################################################
 provider:
   _target_: espnet3.systems.base.inference_provider.InferenceProvider
+# SOT recipes use SotInferenceRunner from
+# espnet3.systems.esp2_s2t.src.sot.inference_runner, which keeps the timestamps
+# and speaker-change symbols in `hyp`.
 runner:
   _target_: espnet3.systems.esp2_s2t.src.inference_runner.ESP2S2TInferenceRunner

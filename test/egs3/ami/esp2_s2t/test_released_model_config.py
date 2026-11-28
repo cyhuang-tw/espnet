@@ -1,4 +1,4 @@
-"""Tests for the configs that decode and pack the released checkpoint."""
+"""Tests for the AMI configs that decode and pack checkpoints."""
 
 import ami_sot_paths
 from omegaconf import OmegaConf
@@ -59,3 +59,20 @@ def test_the_released_publication_config_adds_only_a_description():
     released.pop("exp_tag")
     default.pop("exp_tag")
     assert released == default
+
+
+def test_the_recipe_decodes_with_the_sot_speech2text_and_runner():
+    """The AMI inference config sets the SOT model, the SOT runner and no batching.
+
+    The template uses espnet2's Speech2Text and the plain runner, so the recipe
+    has to set the SOT versions of both.
+    """
+    config = _load("inference.yaml", "inference")
+
+    assert config["model"]["_target_"] == (
+        "espnet3.systems.esp2_s2t.src.sot.s2t_inference.Speech2Text"
+    )
+    assert config["runner"]["_target_"] == (
+        "espnet3.systems.esp2_s2t.src.sot.inference_runner.SotInferenceRunner"
+    )
+    assert config["batch_size"] is None

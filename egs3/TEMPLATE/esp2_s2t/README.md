@@ -4,19 +4,22 @@
 
 This template provides the default configuration for recipes that use
 `espnet3.systems.esp2_s2t.system.ESP2S2TSystem`. The system trains and decodes
-ESPnet2 S2T models with the Whisper vocabulary. The current recipes use it for
+ESPnet2 S2T models, and the default configs here decode with espnet2's own S2T
+`Speech2Text`. The current recipes, AMI and mini_an4, use the system for
 multi-talker ASR with serialized output training (SOT). In SOT, the model
 transcribes each utterance group as one sequence, with a speaker-change symbol
-between speakers and Whisper timestamps in the text. Each corpus recipe
-provides its own dataset implementation and checkpoint settings.
+between speakers and Whisper timestamps in the text. The SOT code is under
+`espnet3/systems/esp2_s2t/src/sot/` and `espnet3/systems/esp2_s2t/metrics/`.
+Each corpus recipe provides its own dataset implementation and checkpoint
+settings.
 
 ## Data
 
-Each item contains an utterance ID, the speech, the serialized target text
-(`text`), and the two auxiliary texts of the S2T task (`text_prev` and
-`text_ctc`). The dataset class of a recipe (`dataset/dataset.py`, a subclass of
-`BaseDataset`) declares these fields as a class attribute. The AMI and mini_an4
-recipes both use the following fields.
+Each item contains an utterance ID, the speech, the target text (`text`), and
+the two auxiliary texts of the S2T task (`text_prev` and `text_ctc`). The
+dataset class of a recipe (`dataset/dataset.py`, a subclass of `BaseDataset`)
+declares these fields as a class attribute. The AMI and mini_an4 recipes both
+use the following fields.
 
 ```python
 from espnet3.contract import Field
@@ -30,31 +33,36 @@ fields = (
 )
 ```
 
-`text` starts with the language and task symbols, for example
-`<|en|><|transcribe|><|0.00|> hello<|1.20|> ???? <|0.80|> hi<|1.50|>`. The SOT
-preprocessor removes `utt_id` before training. At inference time, the input is
-16 kHz mono speech, and the output `hyp` is the serialized hypothesis with its
-timestamps and speaker-change symbols.
+In the SOT recipes, `text` starts with the language and task symbols, for
+example `<|en|><|transcribe|><|0.00|> hello<|1.20|> ???? <|0.80|> hi<|1.50|>`.
+The SOT preprocessor removes `utt_id` before training. At inference time, the
+input is 16 kHz mono speech, and the output `hyp` is the text of the best
+hypothesis. In the SOT recipes, `hyp` keeps its timestamps and speaker-change
+symbols.
 
 ## System Features
 
-The system has no `train_tokenizer` stage because it uses the Whisper
-vocabulary. The `create_dataset` stage of each recipe writes the token list.
-The `collect_stats` stage keeps the setting `model.normalize: null`. The base
-stage removes this setting, so the S2T task would add its default normalizer.
-Inference uses `espnet3.systems.esp2_s2t.src.sot.s2t_inference.Speech2Text`,
-which applies the Whisper timestamp rules within each speaker block. SOT
-decoding processes one utterance group at a time, so the inference config sets
-`batch_size: null`. All other stages come from `BaseSystem` unchanged.
+The system has no `train_tokenizer` stage, because an S2T model uses the
+vocabulary of its pretrained checkpoint. In the SOT recipes, the
+`create_dataset` stage writes the Whisper token list. The `collect_stats` stage
+keeps the setting `model.normalize: null`. The base stage removes this setting,
+so the S2T task would add its default normalizer. By default, inference uses
+`espnet2.bin.s2t_inference.Speech2Text` and `ESP2S2TInferenceRunner`, which
+writes the text of the best hypothesis to `hyp`. The SOT recipes use the
+`Speech2Text` in `src/sot/s2t_inference.py`, which applies the Whisper
+timestamp rules within each speaker block, and `SotInferenceRunner`, which
+keeps the timestamps and speaker-change symbols. SOT decoding processes one
+utterance group at a time. All other stages come from `BaseSystem` unchanged.
 
 ## Metrics
 
-The system provides four metrics, and each of them is computed per utterance
-group: cpWER, DER, speaker-counting accuracy, and WER of the serialized
-transcript. Each metric needs the speaker-change symbol that the checkpoint was
-trained with, and none of them has a default value. Bind the reference to the
-serialized text of the dataset and the hypothesis to `hyp`, as in the following
-example.
+The default metric is the WER of `hyp`. For SOT, the system provides four
+metrics in `espnet3/systems/esp2_s2t/metrics/`, and each of them is computed
+per utterance group: cpWER, DER, speaker-counting accuracy, and WER of the
+serialized transcript. Each of them needs the speaker-change symbol that the
+checkpoint was trained with, and none of them has a default value. A SOT recipe
+binds the reference to the serialized text of the dataset and the hypothesis to
+`hyp`, as in the following example.
 
 ```yaml
 metrics:

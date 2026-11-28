@@ -28,9 +28,11 @@ dataset:
 ##########################################################
 #                    MODEL AND OUTPUT                    #
 ##########################################################
-# speaker_change_symbol and adaptive_timestamp select the SOT timestamp
-# constraints in espnet3/systems/esp2_s2t/src/sot/whisper_timestamp_scorer.py.
+# The SOT Speech2Text applies the timestamp rules in
+# espnet3/systems/esp2_s2t/src/sot/whisper_timestamp_scorer.py, which
+# speaker_change_symbol and adaptive_timestamp turn on.
 model:
+  _target_: espnet3.systems.esp2_s2t.src.sot.s2t_inference.Speech2Text
   # The two files of the released checkpoint. pack_model includes both in the
   # bundle.
   s2t_train_config: ${exp_dir}/config.yaml
@@ -51,5 +53,13 @@ model:
   speaker_change_symbol: ${oc.env:AMI_SOT_SPEAKER_CHANGE_SYMBOL,????}
   adaptive_timestamp: true
 
-# input_key, batch_size, the contract and the runner come from
+# SOT decoding takes one utterance group at a time, because the timestamp rules
+# use one prompt length for the whole beam.
+batch_size: null
+
+# The SOT runner keeps the timestamps and speaker-change symbols in `hyp`.
+runner:
+  _target_: espnet3.systems.esp2_s2t.src.sot.inference_runner.SotInferenceRunner
+
+# input_key and the contract come from
 # egs3/TEMPLATE/esp2_s2t/conf/inference.yaml.

@@ -88,35 +88,24 @@ def test_the_training_default_carries_the_dataloader_plumbing():
     assert cfg.dataloader.train.total_shards == 1
 
 
-def test_the_metric_defaults_are_the_utterance_group_metrics():
-    """The metric defaults are this system's utterance-group metrics.
+def test_the_metric_default_is_the_wer_of_the_hypothesis():
+    """The metric default is a plain WER, which needs no SOT setting.
 
-    No default sets speaker_change_symbol. A default symbol could be used to score
-    a model that was trained with another symbol.
+    SOT recipes replace the list with the utterance-group metrics.
     """
     cfg = load_default_config("metrics.yaml", PACKAGE)
     targets = [entry.metric._target_ for entry in cfg.metrics]
-    assert targets == [
-        "espnet3.systems.esp2_s2t.metrics.cpwer.UtteranceGroupCpWER",
-        "espnet3.systems.esp2_s2t.metrics.der.UtteranceGroupDER",
-        "espnet3.systems.esp2_s2t.metrics.speaker_count."
-        "UtteranceGroupSpeakerCountAccuracy",
-        "espnet3.systems.esp2_s2t.metrics.wer.UtteranceGroupWER",
-    ]
-    for entry in cfg.metrics:
-        assert "speaker_change_symbol" not in entry.metric
-        assert dict(entry.inputs) == {"ref": "dataset:text", "hyp": "hyp"}
+    assert targets == ["espnet3.systems.esp2_asr.metrics.wer.WER"]
+    assert dict(cfg.metrics[0].inputs) == {"ref": "dataset:text", "hyp": "hyp"}
 
 
-def test_the_inference_default_is_the_sot_runner_and_contract():
-    """The inference default sets the SOT Speech2Text, the runner and the contract.
+def test_the_inference_default_is_the_espnet2_speech2text_and_runner():
+    """The inference default uses espnet2's S2T Speech2Text and the plain runner.
 
-    Both recipes inherit these values, so the template defines them once.
+    SOT recipes set the SOT Speech2Text and SotInferenceRunner themselves.
     """
     cfg = load_default_config("inference.yaml", PACKAGE)
-    assert cfg.model._target_ == (
-        "espnet3.systems.esp2_s2t.src.sot.s2t_inference.Speech2Text"
-    )
+    assert cfg.model._target_ == "espnet2.bin.s2t_inference.Speech2Text"
     assert cfg.runner._target_ == (
         "espnet3.systems.esp2_s2t.src.inference_runner.ESP2S2TInferenceRunner"
     )
