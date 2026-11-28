@@ -43,3 +43,19 @@ def test_the_released_inference_config_decodes_config_yaml_and_model_pth():
         default["model"].pop(key)
     default.pop("inference_dir")
     assert released == default
+
+
+def test_the_released_publication_config_adds_only_a_description():
+    """publication_whisper_sot.yaml is publication.yaml with a model description.
+
+    The exp_tag of a publication config comes from the name of the file, and
+    run.py replaces it with the exp_tag of the training config.
+    """
+    released = _load("publication_whisper_sot.yaml", "publication")
+    default = _load("publication.yaml", "publication")
+
+    context = released["pack_model"].pop("readme_context")
+    assert "was not used to train this checkpoint" in context["description"]
+    released.pop("exp_tag")
+    default.pop("exp_tag")
+    assert released == default

@@ -1,19 +1,42 @@
 ##########################################################
 #                  PUBLICATION SETTING                   #
 ##########################################################
-# Publication settings for the released checkpoint. Use this file together with
-# conf/training_whisper_sot.yaml and conf/inference_whisper_sot.yaml.
-defaults:
-  - publication
-  - _self_
+# Publication settings for the released checkpoint. Apart from the model
+# description, this file is the same as conf/publication.yaml. Use it together
+# with conf/training_whisper_sot.yaml and conf/inference_whisper_sot.yaml. See
+# the Results section of the README for the commands.
+#
+# This file overrides parts of egs3/TEMPLATE/esp2_s2t/conf/publication.yaml,
+# which sets out_dir, the README template and the upload_model block. Run infer
+# and measure first. pack_model copies the metrics.json that measure writes and
+# adds its results to the README of the model.
+recipe_dir: .
 
+##########################################################
+#                   PACK MODEL SETTING                   #
+##########################################################
 pack_model:
   readme_context:
-    # The training config in the README is conf/training.yaml, which did not
-    # produce this checkpoint, so the description says so.
+    # The training config in the README is conf/training_whisper_sot.yaml,
+    # which did not produce this checkpoint, so the description says so.
     description: >-
       Multi-talker ASR on AMI SDM with serialized output training, fine-tuned
       from Whisper small. This is the checkpoint of
       espnet/multi-talker-whisper-small-ami, packed with ESPnet3. It was trained
       before the ESPnet3 recipe existed, and the training config below is the
       config of the recipe, which was not used to train this checkpoint.
+  include:
+    - ${recipe_dir}/dataset
+  # The token list is not included separately. The training stage writes the
+  # full list into the config.yaml of the checkpoint, and that file is part of
+  # the bundle.
+
+  exclude:
+    - inference
+    - inference_*
+    - "*.ckpt"
+    - "**/*.log"
+    - "**/tensorboard/**"
+    - "**/wandb/**"
+    # Metadata that hf download writes next to the released files.
+    - .cache

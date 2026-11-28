@@ -95,12 +95,25 @@ from the test set (`dataset:text`) and writes `metrics.json` to the same
 directory. To decode another checkpoint, set `AMI_SOT_TRAIN_CONFIG` and
 `AMI_SOT_MODEL_FILE` to its `config.yaml` and model file before step 4.
 
-### Released checkpoint
+## Results
 
-The released checkpoint was trained before this recipe existed. The configs
-whose names end in `_whisper_sot` decode it and pack it as an ESPnet3 model.
-Download its files into the experiment directory of these configs, then decode,
-score and pack it:
+### Whisper small
+
+- Training config: `conf/training_whisper_sot.yaml`
+- Inference config: `conf/inference_whisper_sot.yaml`
+- Metrics config: `conf/metrics.yaml`
+- Publication config: `conf/publication_whisper_sot.yaml`
+
+The results are on the AMI SDM test set. They come from the released
+checkpoint, which was trained before this recipe existed. Decoding uses beam
+size 5, CTC weight 0.0, and the Whisper timestamp rules within each speaker
+block. Scoring uses the `whisper_en` text cleaner and a DER collar of 0.25 s.
+Training with `conf/training.yaml` has not yet been verified to reproduce these
+numbers.
+
+The following commands download the released checkpoint into the experiment
+directory of these configs, decode and score it, and pack it as an ESPnet3
+model:
 
 ```bash
 hf download espnet/multi-talker-whisper-small-ami config.yaml model.pth \
@@ -111,22 +124,6 @@ python run.py --stages infer measure pack_model \
     --metrics_config conf/metrics.yaml \
     --publication_config conf/publication_whisper_sot.yaml
 ```
-
-## Results
-
-### Whisper small
-
-- Training config: `conf/training.yaml`
-- Inference config: `conf/inference.yaml`
-- Metrics config: `conf/metrics.yaml`
-
-The results are on the AMI SDM test set. Decoding used `conf/inference.yaml`
-with beam size 5, CTC weight 0.0, and the Whisper timestamp rules applied
-within each speaker block. Scoring used `conf/metrics.yaml` with the
-`whisper_en` text cleaner and a DER collar of 0.25 s. The model is the released
-checkpoint listed below, decoded and scored with this recipe. This checkpoint
-was trained before this recipe was written, and training with
-`conf/training.yaml` has not yet been verified to reproduce these numbers.
 
 | Metric | Value (%) |
 | --- | ---: |
@@ -167,5 +164,9 @@ which one speaker mapping covers a whole meeting.
 #### Pretrained model
 
 - [`espnet/multi-talker-whisper-small-ami`](https://huggingface.co/espnet/multi-talker-whisper-small-ami)
-  contains the checkpoint used above and the CutSet manifests that
+  contains the released checkpoint and the CutSet manifests that
   `create_dataset` downloads.
+- [`espnet/ami_esp2_s2t_whisper_small_sot`](https://huggingface.co/espnet/ami_esp2_s2t_whisper_small_sot)
+  is the ESPnet3 package of the same checkpoint, made with the commands above.
+  `InferenceModel.from_pretrained("espnet/ami_esp2_s2t_whisper_small_sot")`
+  loads it.
